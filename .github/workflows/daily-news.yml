@@ -79,6 +79,13 @@ jobs:
           import json, os
           p = '抓取器/state/ci_result.json'
           r = json.load(open(p, encoding='utf-8')) if os.path.exists(p) else {}
+          def cnt(v):
+            # ci_result 里既可能是条数(int)也可能是条目数组(list)，两种都兼容
+            if v is None: return 0
+            if isinstance(v, (int, float)): return int(v)
+            if isinstance(v, (list, tuple, dict)): return len(v)
+            try: return int(v)
+            except (TypeError, ValueError): return 0
           lines = [
             "## 每日公开新闻抓取（%s）" % r.get('target_date', ''),
             "",
@@ -86,17 +93,17 @@ jobs:
             "| 状态 | `%s` |" % r.get('status'),
             "| 抓取时间 | %s |" % r.get('fetched_at'),
             "| 官方权威源 | %s / %s 可用 |" % (r.get('sources_ok'), r.get('sources_total')),
-            "| 本日新增 | %s 条 |" % len(r.get('today') or []),
-            "| 近 7 日权威发布 | %s 条 |" % len(r.get('recent') or []),
-            "| 二级财经线索 | %s 条（仅作线索） |" % len(r.get('hotspots') or []),
+            "| 本日新增 | %s 条 |" % cnt(r.get('today')),
+            "| 近 7 日权威发布 | %s 条 |" % cnt(r.get('recent')),
+            "| 二级财经线索 | %s 条（仅作线索） |" % cnt(r.get('hotspots')),
             "",
           ]
           if r.get('fallback_reason'):
             lines += ["> 空结果保护：" + r['fallback_reason'], ""]
           lines += [
             "### 手机端取数地址", "",
-            "`https://cdn.jsdelivr.net/gh/<你的用户名>/<本仓库名>@main/news.json`", "",
-            "> 把上面地址里的占位符换成你自己的，填进手机页面顶部「设置」。"
+            "`https://cdn.jsdelivr.net/gh/gaoyali/tax-news@main/news.json`", "",
+            "> 打开本仓库 Actions 每次运行页可看到本摘要，核对真实抓取时间。"
             "jsDelivr 可能缓存数小时，页面会如实显示数据抓取时间。", "",
           ]
           out = os.environ.get('GITHUB_STEP_SUMMARY', '')
