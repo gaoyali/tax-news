@@ -1,0 +1,5 @@
+# 只忽略运行日志与缓存；新闻 JSON 和 state 必须提交，切勿忽略
+*.log
+*.tmp
+__pycache__/
+.DS_Store
