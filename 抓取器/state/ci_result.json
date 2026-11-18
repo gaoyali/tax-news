@@ -4,14 +4,14 @@
  "target_date": "2026-11-18",
  "status": "ok",
  "runner": "GitHub Actions 云端定时",
- "fetched_at": "2026-11-18 14:48:07",
- "today": 3,
+ "fetched_at": "2026-11-18 21:36:18",
+ "today": 4,
  "recent": 18,
  "hotspots": 1,
  "sources_ok": 7,
  "sources_total": 9,
  "media_ok": 3,
  "media_total": 5,
- "elapsed": 53.6,
+ "elapsed": 131.3,
  "fallback_reason": ""
 }
