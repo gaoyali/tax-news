@@ -286,6 +286,31 @@ def page_core(h):
     return ""
 
 
+_SKIP_LINE = ("首页", "导航", "网站地图", "版权所有", "主办单位", "备案号", "访问次数",
+              "字体", "打印本页", "正文下载", "扫一扫", "网站纠错", "上一篇", "下一篇",
+              "相关链接", "分享到", "责任编辑", "来源：", "发布时间", "【大", "【中", "【小")
+
+
+def page_body(h):
+    """抓全文供页面内阅读器展示（不跳转浏览器）。抓不到就返回空串，前端如实降级为摘要。
+    只取官方正文段落，过滤导航/页脚噪声；上限 5000 字，避免撑爆 news.json。"""
+    h = re.sub(r"<script.*?</script>|<style.*?</style>|<noscript.*?</noscript>", "", h, flags=re.I | re.S)
+    paras = []
+    for raw in re.findall(r"<p\b[^>]*>(.*?)</p>", h, re.I | re.S):
+        t = strip_tags(raw).strip()
+        if len(t) >= 20 and re.search(r"[\u4e00-\u9fa5]", t) and not t.startswith(_SKIP_LINE):
+            paras.append(t)
+    body = "\n".join(paras)
+    if len(body) < 120:
+        divs = re.findall(r"<div\b[^>]*>(.*?)</div>", h, re.I | re.S)[:200]
+        cand = [strip_tags(x).strip() for x in divs]
+        cand = [x for x in cand if 80 <= len(x) <= 3000 and re.search(r"[\u4e00-\u9fa5]", x)
+                and not x.startswith(_SKIP_LINE)]
+        cand.sort(key=len, reverse=True)
+        body = "\n".join(cand[:3])
+    return re.sub(r"\n{2,}", "\n", body).strip()[:5000]
+
+
 def source_label(host, seed_name):
     if host.startswith("www.chinatax.gov.cn") or host == "chinatax.gov.cn":
         return "国家税务总局"
@@ -403,9 +428,10 @@ def detail(o, target):
             basis = "官方内容页 pubdate 核验" if pub else "官方原文·发布日期未标注"
     title = page_title(h) or o["t"]
     core = page_core(h)
+    body = page_body(h)   # 全文：供手机页面内阅读器直接展开，不跳浏览器；抓不到为空，前端降级
     return {
         "t": title, "src": source_label(host_of(o["u"]), o.get("seed", "")),
-        "url": o["u"], "pub": pub, "core": core,
+        "url": o["u"], "pub": pub, "core": core, "body": body,
         "host": host_of(o["u"]), "cat": guess_cat(title, core),
         "seed": o.get("seed", ""),
         "tier": "财经媒体（二级·仅作线索）" if is_media else "官方权威（一级）",
