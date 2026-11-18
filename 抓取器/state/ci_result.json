@@ -1,17 +1,17 @@
 {
  "changed": true,
  "guarded": false,
- "target_date": "2026-11-18",
+ "target_date": "2026-11-19",
  "status": "ok",
  "runner": "GitHub Actions 云端定时",
- "fetched_at": "2026-11-18 21:36:18",
- "today": 4,
- "recent": 18,
+ "fetched_at": "2026-11-19 04:16:40",
+ "today": 0,
+ "recent": 17,
  "hotspots": 1,
  "sources_ok": 7,
  "sources_total": 9,
  "media_ok": 3,
  "media_total": 5,
- "elapsed": 131.3,
+ "elapsed": 130.2,
  "fallback_reason": ""
 }
