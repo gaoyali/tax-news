@@ -8,7 +8,12 @@ name: 每日新闻抓取并导出 news.json
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # UTC 00:00 = 北京时间 08:00
+    # GitHub 免费定时是「尽力而为」，忙时会延迟甚至跳过某次。
+    # 一天跑 3 次（北京 08:00/13:00/20:00）靠次数对冲漏更；
+    # 工作流内置去重+幂等提交，无新增时不会重复提交，页面始终取最近一次结果。
+    - cron: '0 0 * * *'    # UTC 00:00 = 北京 08:00
+    - cron: '0 5 * * *'    # UTC 05:00 = 北京 13:00
+    - cron: '0 12 * * *'   # UTC 12:00 = 北京 20:00
   workflow_dispatch:
     inputs:
       target_date:
@@ -102,9 +107,9 @@ jobs:
             lines += ["> 空结果保护：" + r['fallback_reason'], ""]
           lines += [
             "### 手机端取数地址", "",
-            "`https://cdn.jsdelivr.net/gh/gaoyali/tax-news@main/news.json`", "",
-            "> 打开本仓库 Actions 每次运行页可看到本摘要，核对真实抓取时间。"
-            "jsDelivr 可能缓存数小时，页面会如实显示数据抓取时间。", "",
+            "`https://raw.githubusercontent.com/gaoyali/tax-news/main/news.json`", "",
+            "> 用 raw 主地址（国内手机最易连通），页面内置了 jsDelivr/Fastly 备用自动切换。"
+            "打开本仓库 Actions 每次运行页可看到本摘要，核对真实抓取时间。", "",
           ]
           out = os.environ.get('GITHUB_STEP_SUMMARY', '')
           if out:
