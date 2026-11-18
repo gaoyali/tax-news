@@ -215,6 +215,18 @@ def strip_tags(s):
     return " ".join(s.split())
 
 
+def strip_tags_keep_br(s):
+    """抓正文专用：把块级标签转成换行，保留段落结构，供阅读器分段展示。"""
+    s = re.sub(r"<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>",
+               " ", s, flags=re.I | re.S)
+    s = re.sub(r"<br\s*/?>|</p>|</div>|</li>|</h[1-6]>|</tr>|</article>|</section>", "\n", s, flags=re.I)
+    s = re.sub(r"<[^>]+>", "", s)
+    s = html.unescape(s)
+    s = re.sub(r"[\t\u3000 ]+", " ", s)
+    s = re.sub(r"\n\s*\n+", "\n", s)
+    return s.strip()
+
+
 def meta_pubdate(h):
     """读官方内容页标准 pubdate；兼容属性顺序与常见别名。"""
     best = ""
@@ -291,23 +303,66 @@ _SKIP_LINE = ("首页", "导航", "网站地图", "版权所有", "主办单位"
               "相关链接", "分享到", "责任编辑", "来源：", "发布时间", "【大", "【中", "【小")
 
 
+def _clean_body(text):
+    """按行过滤噪声行，保留中文正文段落。"""
+    out = []
+    for line in text.split("\n"):
+        t = line.strip()
+        if len(t) < 12 or not re.search(r"[\u4e00-\u9fa5]", t):
+            continue
+        if t.startswith(_SKIP_LINE):
+            continue
+        # 行内噪声：整行基本是链接串/日期戳/纯符号的跳过
+        if re.fullmatch(r"[\d\-/:：.年月日\s]+", t):
+            continue
+        out.append(t)
+    return "\n".join(out)
+
+
 def page_body(h):
     """抓全文供页面内阅读器展示（不跳转浏览器）。抓不到就返回空串，前端如实降级为摘要。
-    只取官方正文段落，过滤导航/页脚噪声；上限 5000 字，避免撑爆 news.json。"""
+    多容器策略：先取所有 <p>；不足时按「<article>/常见正文class容器/<td>/<div>」顺序，
+    选中文字符最多、最像正文的容器。保留段落换行。上限 5000 字，避免撑爆 news.json。"""
     h = re.sub(r"<script.*?</script>|<style.*?</style>|<noscript.*?</noscript>", "", h, flags=re.I | re.S)
+
+    # ① 所有 <p> 段落（覆盖大多数政务站）
     paras = []
     for raw in re.findall(r"<p\b[^>]*>(.*?)</p>", h, re.I | re.S):
-        t = strip_tags(raw).strip()
-        if len(t) >= 20 and re.search(r"[\u4e00-\u9fa5]", t) and not t.startswith(_SKIP_LINE):
+        t = strip_tags_keep_br(raw).strip()
+        if len(t) >= 18 and re.search(r"[\u4e00-\u9fa5]", t) and not t.startswith(_SKIP_LINE):
             paras.append(t)
-    body = "\n".join(paras)
+    body = _clean_body("\n".join(paras))
+
+    # ② 不足时按容器优先级取：article/section + 常见正文 class/id + td + div
     if len(body) < 120:
-        divs = re.findall(r"<div\b[^>]*>(.*?)</div>", h, re.I | re.S)[:200]
-        cand = [strip_tags(x).strip() for x in divs]
-        cand = [x for x in cand if 80 <= len(x) <= 3000 and re.search(r"[\u4e00-\u9fa5]", x)
-                and not x.startswith(_SKIP_LINE)]
-        cand.sort(key=len, reverse=True)
-        body = "\n".join(cand[:3])
+        containers = []
+        # 语义标签
+        for tag in ("article", "section"):
+            containers += re.findall(r"<%s\b[^>]*>(.*?)</%s>" % (tag, tag), h, re.I | re.S)
+        # 常见正文容器 class/id（TRS、政府站模板常用）
+        for raw in re.findall(r"<(?:div|td)\b[^>]*(?:class|id)\s*=\s*[\"'][^\"']*(?:content|article|detail|TRS_Editor|zoom|conTxt|text|main|body)[^\"']*[\"'][^>]*>(.*?)</(?:div|td)>", h, re.I | re.S):
+            containers.append(raw)
+        # 兜底所有 div/td
+        containers += re.findall(r"<(?:div|td)\b[^>]*>(.*?)</(?:div|td)>", h, re.I | re.S)[:260]
+        cand = []
+        for c in containers:
+            t = _clean_body(strip_tags_keep_br(c))
+            cn = len(re.findall(r"[\u4e00-\u9fa5]", t))
+            if 60 <= len(t) <= 4000 and cn >= 40 and not t.startswith(_SKIP_LINE):
+                # 正文密度：中文越多、噪声行占比越低越优先
+                lines = [x for x in t.split("\n") if x]
+                density = cn / max(1, len(lines))
+                cand.append((cn, density, t))
+        cand.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        if cand:
+            body = cand[0][2]
+
+    # ③ 再兜底 meta description
+    if len(body) < 80:
+        for tag in re.findall(r"<meta\b[^>]*>", h, re.I):
+            m = re.search(r"name\s*=\s*[\"']description[\"']\s+content\s*=\s*[\"']([^\"']{30,})[\"']", tag, re.I)
+            if m:
+                body = html.unescape(m.group(1)); break
     return re.sub(r"\n{2,}", "\n", body).strip()[:5000]
 
 
